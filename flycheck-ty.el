@@ -1,19 +1,19 @@
-;;; flycheck-astral.el --- Support ruff and ty in flycheck
+;;; flycheck-ty.el --- Support ty in flycheck
 
 ;; Copyright (C) 2025 Jacob Wilkins <jacob.wilkins@stfc.ac.uk>
 ;;
 ;; Author: Jacob Wilkins <jacob.wilkins@stfc.ac.uk>
 ;; Created: 17 May 2025
-;; Version: 1.0
+;; Version: 1.1
 ;; Package-Requires: ((flycheck "0.18"))
 ;; Modified from https://github.com/flycheck/flycheck/issues/1974#issuecomment-1343495202
 
 ;;; Commentary:
 
-;; This package adds support for ruff and ty to flycheck.  To use it, add
+;; This package adds support for ty to flycheck.  To use it, add
 ;; to your init.el:
 
-;; (require 'flycheck-astral)
+;; (require 'flycheck-ty)
 ;; (add-hook 'python-mode-hook 'flycheck-mode)
 
 ;;; License:
@@ -39,11 +39,30 @@
 ;;; Code:
 (require 'flycheck)
 
-(defcustom ty-custom-python ""
+(flycheck-def-config-file-var flycheck-python-ty-config python-ty
+                              '("ty.toml" ".ty.toml"))
+
+(flycheck-def-option-var flycheck-ty-custom-python "" (python-ty)
   "Location of custom Python for e.g. pyenv."
-  :type 'string
-  :get (lambda (symb) (if (not (string-empty-p symb)) (expand-file-name symb)))
+  :type '(radio (const :tag "Default" nil)
+                 (const :tag "Local UV" "uv")
+                 (string :tag "Custom location"))
   )
+
+(defun flycheck-ty-find-env (source cust)
+  "Return current environment if using uv.
+
+   SOURCE is the current python source.
+   CUST is the variable containing the configured value."
+  (cond
+   ((not cust) "")
+   ((string-equal cust "uv") (let ((default-directory (replace-regexp-in-string "/[^/]+$" "/" source)))
+                               (replace-regexp-in-string "\n$" "" (shell-command-to-string "uv python find")))
+    )
+   (t cust)
+   )
+  )
+
 
 (flycheck-define-checker python-ty
   "A Python syntax and style checker using the ty utility.
@@ -52,8 +71,13 @@ To override the path to the ty executable, set
 See URL `http://pypi.python.org/pypi/ty'."
   :command ("ty"
             "check"
+            (config-file "--config" flycheck-python-ty-config)
             "--output-format" "concise"
-            (option "--python" ty-custom-python)
+            (eval
+             (let ((name (flycheck-ty-find-env (buffer-file-name) flycheck-ty-custom-python)))
+               (if (not (string-empty-p name)) (list "--python" name) "")
+               )
+             )
             source)
   :error-filter (lambda (errors)
                   (let ((errors (flycheck-sanitize-errors errors)))
@@ -61,20 +85,20 @@ See URL `http://pypi.python.org/pypi/ty'."
   :error-patterns
   (
    (error line-start
-          "error[" (id (one-or-more (any alpha "-"))) "] "
           (file-name) ":" line ":" (optional column ":") " "
+          "error[" (id (one-or-more (any alpha "-"))) "] "
           (message (one-or-more not-newline))
           line-end)
    (warning line-start
-          "warning[" (id (one-or-more (any alpha "-"))) "] "
-          (file-name) ":" line ":" (optional column ":") " "
-          (message (one-or-more not-newline))
-          line-end)
+            (file-name) ":" line ":" (optional column ":") " "
+            "warning[" (id (one-or-more (any alpha "-"))) "] "
+            (message (one-or-more not-newline))
+            line-end)
    (info line-start
-          "info[" (id (one-or-more (any alpha "-"))) "] "
-          (file-name) ":" line ":" (optional column ":") " "
-          (message (one-or-more not-newline))
-          line-end)
+         (file-name) ":" line ":" (optional column ":") " "
+         "info[" (id (one-or-more (any alpha "-"))) "] "
+         (message (one-or-more not-newline))
+         line-end)
    )
   :predicate (lambda () (buffer-file-name))
 
@@ -85,50 +109,9 @@ See URL `http://pypi.python.org/pypi/ty'."
     (let ((error-code (flycheck-error-id err))
           (url "https://github.com/astral-sh/ty/blob/main/docs/reference/rules.md#"))
       (and error-code `(url . ,(concat url error-code)))))
-
+  :next-checkers (python-ruff)
   )
-
-
-(flycheck-define-checker python-ruff-cust
-  "A Python syntax and style checker using the ruff utility.
-To override the path to the ruff executable, set
-`flycheck-python-ruff-executable'.
-See URL `http://pypi.python.org/pypi/ruff'."
-  :command ("ruff" "check"
-            "--output-format=concise"
-            (eval (when buffer-file-name
-                    (concat "--stdin-filename=" buffer-file-name)))
-            "-")
-  :standard-input t
-  :error-filter (lambda (errors)
-                  (let ((errors (flycheck-sanitize-errors errors)))
-                    (seq-map #'flycheck-flake8-fix-error-level errors)))
-  :error-patterns
-  (
-   (error line-start
-          (file-name) ":" line ":" (optional column ":") " "
-          (id (one-or-more (any alpha))) ": "
-          (message (one-or-more not-newline))
-          line-end)
-   (warning line-start
-            (file-name) ":" line ":" (optional column ":") " "
-            (id (one-or-more (any alpha)) (one-or-more digit)) " "
-            (message (one-or-more not-newline))
-            line-end)
-   )
-  :next-checkers ((t . python-ty))
-  :modes (python-mode python-ts-mode)
-
-  :error-explainer
-  (lambda (err)
-    (let ((error-code (flycheck-error-id err))
-          (url "https://docs.astral.sh/ruff/rules/"))
-      (and error-code `(url . ,(concat url error-code)))))
-  )
-
 
 (add-to-list 'flycheck-checkers 'python-ty)
-(add-to-list 'flycheck-checkers 'python-ruff-cust)
-
-(provide 'flycheck-astral)
-;;; flycheck-astral.el ends here
+(provide 'flycheck-ty)
+;;; flycheck-ty.el ends here

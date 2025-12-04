@@ -1,24 +1,23 @@
-# flycheck-astral
-Flycheck files for ruff and ty
+# flycheck-ty
+Flycheck files for ty
 
 ## To use
 
 Run
 
 ```sh
-uv tool install ruff
 uv tool install ty
 ```
 or
 ```sh
-python3 -m pip install ruff ty
+python3 -m pip install ty
 ```
 .
 
 Add
 
 ```elisp
-(load-file "/path/to/flycheck-astral/flycheck-astral.el")
+(load-file "/path/to/flycheck-astral/flycheck-ty.el")
 (add-hook 'python-mode-hook 'flycheck-mode)
 (add-hook 'python-ts-mode-hook 'flycheck-mode)
 ```
