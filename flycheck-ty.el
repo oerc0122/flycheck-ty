@@ -1,4 +1,4 @@
-;;; flycheck-ty.el --- Support ty in flycheck
+;;; flycheck-ty.el --- Support ty in flycheck -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2025 Jacob Wilkins <jacob.wilkins@stfc.ac.uk>
 ;;
