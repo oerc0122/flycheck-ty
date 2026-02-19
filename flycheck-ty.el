@@ -71,7 +71,7 @@ To override the path to the ty executable, set
 See URL `http://pypi.python.org/pypi/ty'."
   :command ("ty"
             "check"
-            (config-file "--config" flycheck-python-ty-config)
+            (config-file "--config-file" flycheck-python-ty-config)
             "--output-format" "concise"
             (eval
              (let ((name (flycheck-ty-find-env (buffer-file-name) flycheck-ty-custom-python)))
