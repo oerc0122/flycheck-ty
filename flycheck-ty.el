@@ -49,6 +49,45 @@
                  (string :tag "Custom location"))
   )
 
+(defun flycheck-string-or-symbol-p (obj)
+  "Determine if OBJ is a string or a symbol."
+  (or (stringp obj) (symbolp obj)))
+
+(flycheck-def-option-var flycheck-python-ty-project-dir 'flycheck-auto python-ty
+  "The directory that ty will be run from.
+
+If it is symbol 'flycheck-auto, Flycheck will try to discover the file's
+project directory.  This is the default, as not specifiying it will lead
+to problems when using project settings with how Flycheck writes the
+source to out-of-project temporary directories.
+
+If it is nil, do not try to discover the file's project directory.
+Without this, running ty on files that are not a part of a project may
+be slow or give spurious results.
+
+Otherwise, it should be a string that is a directory path.
+
+From the official CLI documentation:
+
+All `pyproject.toml` files will be discovered by walking up the
+directory tree from the given project directory, as will the project's
+virtual environment (`.venv`) unless the `venv-path` option is set.
+Other command-line arguments (such as relative paths) will be resolved
+relative to the current working directory."
+  :type '(choice (const :tag "Discovered using `flycheck-python-find-project-root'" flycheck-auto)
+                 (const :tag "Don't discover or use a custom project directory" nil)
+                 (string :tag "Custom project root"))
+  :safe #'flycheck-string-or-symbol-p)
+
+(defun flycheck--ty-form-project-arg (value)
+  "Option VALUE filter for `flycheck-python-ty-project-dir'."
+  (pcase value
+    ;; The checker argument is unused.
+    (`flycheck-auto (expand-file-name (flycheck-python-find-project-root nil)))
+    (`nil nil)
+    ((pred stringp) (expand-file-name v))
+    (_ (error "Invalid value for flycheck-python-ty-project-dir: %S" value))))
+
 (defun flycheck-ty-find-env (source cust)
   "Return current environment if using uv.
 
@@ -72,6 +111,9 @@ See URL `http://pypi.python.org/pypi/ty'."
   :command ("ty"
             "check"
             (config-file "--config-file" flycheck-python-ty-config)
+            (eval (let ((project-dir (flycheck--ty-form-project-arg flycheck-python-ty-project-dir)))
+                    (when project-dir
+                      (list "--project" project-dir))))
             "--output-format" "concise"
             (eval
              (let ((name (flycheck-ty-find-env (buffer-file-name) flycheck-ty-custom-python)))
